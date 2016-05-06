@@ -24,7 +24,9 @@
 
 <body>
 
-<div id="info">hw4</div>
+<div id="info">hw4<br/>
+	Toy Tractor <a href='https://clara.io/view/6cfd2724-38a3-4212-8d86-e35990eaca55#'>url</a>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
 <script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
@@ -32,6 +34,7 @@
 <script>
 
 var camera, scene, renderer, control;
+var car, angle = 0;
 
 init();
 animate();
@@ -40,6 +43,8 @@ function init() {
 	renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(window.innerWidth, window.innerHeight);
 	renderer.setClearColor (0x888888);
+	renderer.shadowMapEnabled = true;
+	renderer.shadowMapType = THREE.PCFSoftShadowMap;
 
     document.body.appendChild(renderer.domElement);
 	
@@ -47,32 +52,89 @@ function init() {
 
 	//camera
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
-    camera.position.z = 500;
+    camera.position.set (0, 500, 400);
     scene.add(camera);
 	
 	control = new THREE.OrbitControls(camera, renderer.domElement);
 	
 	//grid
-	var grid = new THREE.GridHelper (100, 10);
+	/*var grid = new THREE.GridHelper (100, 10);
 	grid.setColors (0xff0000, 0xffffff);
-	scene.add (grid);
+	scene.add (grid);*/
+
+	//ground  
+	THREE.ImageUtils.crossOrigin = '';
+	var tex = THREE.ImageUtils.loadTexture('https://i.imgur.com/vQNTKeU.jpg');
+	var bmp = THREE.ImageUtils.loadTexture('https://i.imgur.com/05ZbsfG.jpg');
+	var ground = new THREE.Mesh (new THREE.PlaneGeometry (1000, 1000),
+		new THREE.MeshPhongMaterial ({
+			map: tex, bumpMap: bmp, side: THREE.DoubleSide
+	}));
+	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+	tex.repeat.set(3, 3);
+	bmp.wrapS = bmp.wrapT = THREE.RepeatWrapping;
+	bmp.repeat.set(3, 3);
+	scene.add (ground);
+	ground.rotation.x = Math.PI / 2;
+	ground.receiveShadow = true;
 	
 	//light
-    light = new THREE.PointLight(0xffffff);
-    light.position.set(100, 300, 400);
+    light = new THREE.DirectionalLight(0xffffff);
+    light.position.set(-1, 1, 1);
     scene.add(light);
+    light.castShadow = true;
+	light.shadowMapWidth = 2048;
+	light.shadowMapHeight = 2048;
+	light.shadowCameraNear = -700;
+	light.shadowCameraFar = 700;
+	light.shadowCameraLeft = -700;
+	light.shadowCameraRight = 700;
+	light.shadowCameraVisible = false;
 
     //loader
     var loader = new THREE.ObjectLoader();
 	loader.load("http://naidy.github.io/CG/model/toy-tractor/toy-tractor-vray.json",function ( obj ) {
+    	obj.traverse( function ( child ) {
+		    if (child instanceof THREE.Mesh){
+		        child.castShadow = true;
+		        child.receiveShadow = true;
+		    }
+		});
     	scene.add( obj );
+    	car = obj;
 	});
-	/*
-	var loader = new THREE.JSONLoader();
-	loader.load( 'http://naidy.github.io/CG/model/space-ship/space-shuttle-orbiter.json', function ( geometry, materials ) {
-    	var mesh = new THREE.Mesh( geometry, new THREE.MeshFaceMaterial(materials));
-    	scene.add( mesh );
-	});*/
+
+	//box
+	var boxTex = [];
+	boxTex.push(new THREE.MeshPhongMaterial({
+		color: 0xffffff,
+		side: THREE.DoubleSide
+	}));
+	boxTex.push(new THREE.MeshPhongMaterial({
+		color: 0xffffff,
+		side: THREE.DoubleSide
+	}));
+	boxTex.push(new THREE.MeshPhongMaterial({
+		color: 0xffffff,
+		side: THREE.DoubleSide
+	}));
+	boxTex.push(new THREE.MeshPhongMaterial({
+		color: 0xffffff,
+		side: THREE.DoubleSide
+	}));
+	boxTex.push(new THREE.MeshPhongMaterial({
+		map: THREE.ImageUtils.loadTexture('http://naidy.github.io/CG/imgs/me.jpg'),
+		side: THREE.DoubleSide
+	}));
+	boxTex.push(new THREE.MeshPhongMaterial({
+		color: 0xffffff,
+		side: THREE.DoubleSide
+	}));
+	var box = new THREE.Mesh (new THREE.BoxGeometry (100, 100, 100),
+		new THREE.MeshFaceMaterial(boxTex));
+	scene.add (box);
+	box.position.y = 50;
+	box.castShadow = true;
 	
     window.addEventListener('resize', onWindowResize, false);
 }
@@ -83,8 +145,16 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+function dToR (n){
+	return n * Math.PI / 180;
+}
+
 function animate() {
     requestAnimationFrame(animate);
+
+    angle += 0.3;
+    car.position.set (Math.cos(dToR(angle)) * 200, 0, -Math.sin(dToR(angle)) * 200);
+    car.rotation.y = dToR(angle);
 	
     render();
 	update();
