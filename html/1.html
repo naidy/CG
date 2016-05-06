@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 30px;
+		position: absolute;
+	}
+	#info {
+		position: absolute;
+		top: 10px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00;
+	}
+</style>
+</head>
+
+<body>
+
+<div id="info">Timer
+  <br/> 
+  <br/>
+  <br/>
+  <button id="toggle" style="width:15%">Toggle Turn</button>
+  <button id="quartz" style="width:15%">Quartz</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+<script>
+
+var scene, renderer, camera;
+var angleD = 0, angleE = 0, turn = false;
+var circle, secondHand, sector1, sector2;
+var geo, mat, sectorStatus = 1;
+var rColor = new THREE.Color (0xff1234);
+var dn1, dn2, dnTex, dnFace;
+var dnGeo1, dnGeo2, dnMat;
+var time = 0;
+var clock = new THREE.Clock();
+var tick;
+var mode = 0;  //0:analog 1:quartz 2:sector
+
+var size = 1;
+
+init();
+animate();
+
+$("#toggle").click(function() {
+  turn = !turn;
+});
+$("#quartz").click(function() {
+  if ($("#quartz").text() == "Quartz"){
+  	$("#quartz").text("Sector");
+    mode = 1;
+  }else if ($("#quartz").text() == "Sector"){
+  	$("#quartz").text("Analog");
+    mode = 2;
+  }else if ($("#quartz").text() == "Analog"){
+  	$("#quartz").text("Quartz");
+    mode = 0;
+  }
+});
+
+function init() {
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer({antialias: true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+  camera.position.z = 350 * size;
+
+	//Circle
+  var circleGeo = new THREE.CircleGeometry (100 * size, 64);
+  var circleMat = new THREE.MeshBasicMaterial ();
+  circle = new THREE.Mesh (circleGeo, circleMat);
+  scene.add (circle);
+  
+  var circle2Geo = new THREE.CircleGeometry (90 * size, 64);
+  var circle2Mat = new THREE.MeshBasicMaterial ({color: 0xaaaaaa});
+  var circle2 = new THREE.Mesh (circle2Geo, circle2Mat);
+  scene.add (circle2);
+  
+  var circle3Mat = new THREE.MeshBasicMaterial ({color: 0x444444, side: THREE.BackSide});
+  var circle3 = new THREE.Mesh (circle2Geo, circle3Mat);
+  scene.add (circle3);
+  
+  //Sector
+  geo = new THREE.CircleGeometry (100 * size, 64, Math.PI / 2, 0);
+  mat = new THREE.MeshBasicMaterial ({color: rColor, side: THREE.BackSide});
+  sector1 = new THREE.Mesh (geo, mat);
+  scene.add (sector1);
+  sector1.position.z = 1;
+  
+  sector2 = sector1.clone();
+  scene.add (sector2);
+  sector2.position.z = 1;
+  
+  //DigitNumber
+  THREE.ImageUtils.crossOrigin = '';
+  dnTex = THREE.ImageUtils.loadTexture ('https://i.imgur.com/L0Mwjp2.jpg');
+  dnGeo1 = new THREE.Geometry ();
+	dnGeo1.vertices.push (
+		new THREE.Vector3 ( -20 * size,-40 * size,0),
+		new THREE.Vector3 (  20 * size,-40 * size,0),
+		new THREE.Vector3 ( 20 * size,40 * size,0),
+		new THREE.Vector3 (-20 * size,40 * size,0)
+	);
+	dnFace = new THREE.Face3 (0,1,2); 
+	dnGeo1.faces.push (dnFace);
+	dnFace = new THREE.Face3 (0,2,3);
+	dnGeo1.faces.push (dnFace);
+  dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0),new THREE.Vector2(1,0.5)]);
+	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0.5),new THREE.Vector2(0.8,0.5)]);
+  dnGeo1.computeBoundingSphere();
+	dnGeo1.computeFaceNormals();
+	dnGeo1.computeVertexNormals();
+  dnMat = new THREE.MeshBasicMaterial ({map: dnTex});
+  dn1 = new THREE.Mesh (dnGeo1, dnMat);
+  scene.add (dn1);
+  dn1.rotation.y = Math.PI;
+  dn1.position.set (20 * size, 0, -1 * size);
+  
+  dn2 = dn1.clone();
+  scene.add (dn2);
+  dn2.position.x = -20 * size;
+  
+  //SecondHand
+  var shGeo1 = new THREE.CircleGeometry (70 * size, 8, -Math.PI / 30, Math.PI / 15);
+  var shMat = new THREE.MeshBasicMaterial ({color: 0x000000});
+  var sh1 = new THREE.Mesh (shGeo1, shMat);
+  sh1.position.y = 69.6 * size;
+  sh1.rotation.z = -Math.PI / 2;
+  
+  var shGeo2 = new THREE.CircleGeometry (130 / 17.5 * size, 32, 0, Math.PI);
+  var sh2 = new THREE.Mesh (shGeo2, shMat);
+  sh2.rotation.z = Math.PI;
+  
+  secondHand = new THREE.Object3D();
+  secondHand.add (sh1);
+  secondHand.add (sh2);
+  scene.add (secondHand);
+  secondHand.position.z = 10;
+  
+  //Tick
+  var tickGeo = new THREE.PlaneGeometry (3 * size, 15 * size);
+  var tickMat = new THREE.MeshBasicMaterial ({color: 0x000000});
+  var tick1 = new THREE.Mesh (tickGeo, tickMat);
+  tick1.position.y = 93 * size;
+  
+  var tick2 = tick1.clone();
+  tick2.position.set (93 * size, 0, 0);
+  tick2.rotation.z = Math.PI / 2;
+  
+  var tick3 = tick1.clone();
+  tick3.position.y = -93 * size;
+  
+  var tick4 = tick2.clone();
+  tick4.position.x = -93 * size;
+  
+  tick = new THREE.Object3D();
+  tick.add (tick1);
+  tick.add (tick2);
+  tick.add (tick3);
+  tick.add (tick4);
+  scene.add (tick);
+  tick.position.z = 1;
+  
+
+  window.addEventListener('resize', onWindowResize, false);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function digitNum (time){
+	scene.remove (dn1);
+  scene.remove (dn2);
+  dnGeo1 = new THREE.Geometry ();
+	dnGeo1.vertices.push (
+		new THREE.Vector3 ( -20 * size,-40 * size,0),
+		new THREE.Vector3 (  20 * size,-40 * size,0),
+		new THREE.Vector3 ( 20 * size,40 * size,0),
+		new THREE.Vector3 (-20 * size,40 * size,0)
+	);
+	dnFace = new THREE.Face3 (0,1,2); 
+	dnGeo1.faces.push (dnFace);
+	dnFace = new THREE.Face3 (0,2,3);
+	dnGeo1.faces.push (dnFace);
+	
+  switch (Math.floor(time / 10)){
+  	case 0:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0),new THREE.Vector2(1,0.5)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0.5),new THREE.Vector2(0.8,0.5)]);
+      break;
+    case 1:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0,0.5),new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.2,1)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0,0.5),new THREE.Vector2(0.2,1),new THREE.Vector2(0,1)]);
+      break;
+    case 2:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.4,1)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.4,1),new THREE.Vector2(0.2,1)]);
+      break;
+    case 3:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.6,1)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.6,1),new THREE.Vector2(0.4,1)]);
+      break;
+    case 4:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.8,0.5),new THREE.Vector2(0.8,1)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.8,1),new THREE.Vector2(0.6,1)]);
+      break;
+    case 5:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0.5),new THREE.Vector2(1,0.5),new THREE.Vector2(1,1)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0.5),new THREE.Vector2(1,1),new THREE.Vector2(0.8,1)]);
+      break;
+    case 6:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0,0),new THREE.Vector2(0.2,0),new THREE.Vector2(0.2,0.5)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0,0),new THREE.Vector2(0.2,0.5),new THREE.Vector2(0,0.5)]);
+      break;
+    case 7:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0),new THREE.Vector2(0.4,0),new THREE.Vector2(0.4,0.5)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0),new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.2,0.5)]);
+      break;
+    case 8:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0),new THREE.Vector2(0.6,0),new THREE.Vector2(0.6,0.5)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0),new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.4,0.5)]);
+      break;
+    case 9:
+    	dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0),new THREE.Vector2(0.8,0),new THREE.Vector2(0.8,0.5)]);
+			dnGeo1.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0),new THREE.Vector2(0.8,0.5),new THREE.Vector2(0.6,0.5)]);
+      break;
+	}
+	dnGeo1.computeBoundingSphere();
+	dnGeo1.computeFaceNormals();
+	dnGeo1.computeVertexNormals();
+  
+  dn1 = new THREE.Mesh (dnGeo1, dnMat);
+  scene.add (dn1);
+  dn1.rotation.y = Math.PI;
+  dn1.position.set (20 * size, 0, -1 * size);
+  
+  dnGeo2 = new THREE.Geometry ();
+	dnGeo2.vertices.push (
+		new THREE.Vector3 ( -20 * size,-40 * size,0),
+		new THREE.Vector3 (  20 * size,-40 * size,0),
+		new THREE.Vector3 ( 20 * size,40 * size,0),
+		new THREE.Vector3 (-20 * size,40 * size,0)
+	);
+	dnFace = new THREE.Face3 (0,1,2); 
+	dnGeo2.faces.push (dnFace);
+	dnFace = new THREE.Face3 (0,2,3);
+	dnGeo2.faces.push (dnFace);
+	
+  switch (Math.round(time % 10)){
+  	case 0:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0),new THREE.Vector2(1,0.5)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0),new THREE.Vector2(1,0.5),new THREE.Vector2(0.8,0.5)]);
+      break;
+    case 1:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0,0.5),new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.2,1)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0,0.5),new THREE.Vector2(0.2,1),new THREE.Vector2(0,1)]);
+      break;
+    case 2:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.4,1)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0.5),new THREE.Vector2(0.4,1),new THREE.Vector2(0.2,1)]);
+      break;
+    case 3:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.6,1)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.6,1),new THREE.Vector2(0.4,1)]);
+      break;
+    case 4:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.8,0.5),new THREE.Vector2(0.8,1)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.8,1),new THREE.Vector2(0.6,1)]);
+      break;
+    case 5:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0.5),new THREE.Vector2(1,0.5),new THREE.Vector2(1,1)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.8,0.5),new THREE.Vector2(1,1),new THREE.Vector2(0.8,1)]);
+      break;
+    case 6:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0,0),new THREE.Vector2(0.2,0),new THREE.Vector2(0.2,0.5)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0,0),new THREE.Vector2(0.2,0.5),new THREE.Vector2(0,0.5)]);
+      break;
+    case 7:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0),new THREE.Vector2(0.4,0),new THREE.Vector2(0.4,0.5)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.2,0),new THREE.Vector2(0.4,0.5),new THREE.Vector2(0.2,0.5)]);
+      break;
+    case 8:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0),new THREE.Vector2(0.6,0),new THREE.Vector2(0.6,0.5)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.4,0),new THREE.Vector2(0.6,0.5),new THREE.Vector2(0.4,0.5)]);
+      break;
+    case 9:
+    	dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0),new THREE.Vector2(0.8,0),new THREE.Vector2(0.8,0.5)]);
+			dnGeo2.faceVertexUvs[0].push ([new THREE.Vector2(0.6,0),new THREE.Vector2(0.8,0.5),new THREE.Vector2(0.6,0.5)]);
+      break;
+	}
+	dnGeo2.computeBoundingSphere();
+	dnGeo2.computeFaceNormals();
+	dnGeo2.computeVertexNormals();
+  
+  dn2 = new THREE.Mesh (dnGeo2, dnMat);
+  scene.add (dn2);
+  dn2.rotation.y = Math.PI;
+  dn2.position.set (-20 * size, 0, -1 * size);
+}
+
+function sectorAnimate (angle){
+	geo = new THREE.CircleGeometry (100 * size, 64, Math.PI / 2, angle);
+  mat = new THREE.MeshBasicMaterial ({color: rColor, side: THREE.BackSide});
+  switch (sectorStatus){
+  	case 1:
+    	scene.remove (sector1);
+      sector1 = new THREE.Mesh (geo, mat);
+      scene.add (sector1);
+      sector1.position.z = 1;
+      sector2.position.z = 2;
+      break;
+    case 2:
+    	scene.remove (sector2);
+      sector2 = new THREE.Mesh (geo, mat);
+      scene.add (sector2);
+      sector1.position.z = 2;
+      sector2.position.z = 1;
+      break;
+  }
+}
+
+function animate() {
+  var dt = clock.getDelta();
+  if (turn){
+    angleD += dt * Math.PI / 30;
+    if (angleD >= Math.PI * 2){
+    	angleD = 0;
+      rColor = new THREE.Color (Math.random(), Math.random(), Math.random());
+      sectorStatus = sectorStatus == 1 ? 2 : 1;
+    }
+  	angleE = Math.floor(angleD * 30 / Math.PI) / 30 * Math.PI;
+    time = Math.round(angleE * 30 / Math.PI);
+  }
+  
+  switch (mode){
+  	case 0:
+    	camera.position.z = 350 * size;
+      camera.lookAt (new THREE.Vector3(0, 0, 0));
+      secondHand.rotation.z = -angleD;
+      break;
+    case 1:
+    	camera.position.z = 350 * size;
+      camera.lookAt (new THREE.Vector3(0, 0, 0));
+      secondHand.rotation.z = -angleE;
+      break;
+    case 2:
+    	camera.position.z = -350 * size;
+      camera.lookAt (new THREE.Vector3(0, 0, 0));
+      sectorAnimate (angleD);
+      if (turn)
+      	digitNum (time);
+      break;
+  }
+
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+
+</script>
+
+</body>
+</html>

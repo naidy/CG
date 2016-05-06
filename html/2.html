@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 30px;
+		position: absolute;
+	}
+	#info {
+		position: absolute;
+		top: 10px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00;
+	}
+</style>
+</head>
+
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
+<script src="https://naidy.github.io/project/js/dat.gui.min.js"></script>
+
+<script>
+
+var scene, renderer, camera, control, gcontrols;
+var torso, head, legL, legR, handL, handR;
+var dan, danColor;
+
+var Angle = function() {
+  this.x = 0;
+  this.y = 0;
+  this.z = 0;
+}
+var Rotate = function() {
+  this.L = new Angle();
+  this.R = new Angle();
+}
+
+var handAngle = new Rotate();
+var legAngle = new Rotate();
+var headAngle = new Angle();
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  document.body.appendChild(renderer.domElement);
+
+  //camera
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.set(0, 300, 400);
+
+  //control
+  control = new THREE.OrbitControls(camera, renderer.domElement);
+
+  //ground
+  THREE.ImageUtils.crossOrigin = '';
+  var groundGeo = new THREE.PlaneGeometry(500, 500);
+  var groundTex = THREE.ImageUtils.loadTexture('https://i.imgur.com/FCx71uS.jpg');
+  var groundMat = new THREE.MeshBasicMaterial({
+    map: groundTex,
+    side: THREE.DoubleSide
+  });
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+  groundTex.repeat.set(3, 3);
+  var ground = new THREE.Mesh(groundGeo, groundMat);
+  scene.add(ground);
+  ground.rotation.x = Math.PI / 2;
+
+  //dan
+  dan = new THREE.Object3D();
+  scene.add(dan);
+  danColor = new THREE.Color(0xc2a57e);
+  dan.position.y = 91;
+
+  //torso
+  var torsoGeo = new THREE.BoxGeometry(50, 70, 30);
+  var torsoTex = [];
+
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    side: THREE.BackSide
+  }));
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/fuu4GEJ.png'),
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/MV3skyt.png'),
+    side: THREE.DoubleSide
+  }));
+  var torsoMat = new THREE.MeshFaceMaterial(torsoTex);
+
+  torso = new THREE.Mesh(torsoGeo, torsoMat);
+  dan.add(torso);
+
+  var skirt = new THREE.Mesh(new THREE.PlaneGeometry(50, 15), torsoMat);
+  skirt.position.set(0, -40, 18);
+  skirt.rotation.x = dToR(-18);
+  torso.add(skirt);
+
+  var skirtB = skirt.clone();
+  skirtB.position.z = -18;
+  skirtB.rotation.x = dToR(18);
+  torso.add(skirtB);
+
+  var skirtL = new THREE.Mesh(new THREE.PlaneGeometry(30, 15), torsoMat);
+  skirtL.position.set(-28, -40, 0);
+  skirtL.eulerOrder = 'YXZ';
+  skirtL.rotation.x = dToR(-18);
+  skirtL.rotation.y = dToR(-90);
+  torso.add(skirtL);
+
+  var skirtR = new THREE.Mesh(new THREE.PlaneGeometry(30, 15), torsoMat);
+  skirtR.position.set(28, -40, 0);
+  skirtR.eulerOrder = 'YXZ';
+  skirtR.rotation.x = dToR(-18);
+  skirtR.rotation.y = dToR(90);
+  torso.add(skirtR);
+
+  //head
+  var headGeo = new THREE.BoxGeometry(110, 70, 70);
+  var headColor = new THREE.Color(0xc2a57e);
+
+  var headTex = [];
+  headTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/CpqAgC3.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/u2ygMTw.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshBasicMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshBasicMaterial({
+    side: THREE.BackSide
+  }));
+  headTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/F5xb32t.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshBasicMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/fjYKUXE.png'),
+    side: THREE.DoubleSide
+  }));
+  var headMat = new THREE.MeshFaceMaterial(headTex);
+  var headM = new THREE.Mesh(headGeo, headMat);
+
+  head = new THREE.Object3D();
+  headM.position.y = 30;
+  head.add(headM);
+
+  dan.add(head);
+  head.position.y = 40;
+
+  //leg
+  var legGeo = new THREE.BoxGeometry(22, 50, 30);
+  var legMat = new THREE.MeshBasicMaterial({
+    color: danColor
+  });
+  var legLM = new THREE.Mesh(legGeo, legMat);
+  legL = new THREE.Object3D();
+  legLM.position.y = -25;
+  legL.add(legLM);
+  dan.add(legL);
+  legL.position.set(-15, -40, 0);
+
+  var legRM = legLM.clone();
+  legR = new THREE.Object3D();
+  legR.add(legRM);
+  dan.add(legR);
+  legR.position.set(15, -40, 0);
+
+  //hand
+  var handGeo = new THREE.BoxGeometry(15, 80, 15);
+  var handLM = new THREE.Mesh(handGeo, legMat);
+  handL = new THREE.Object3D();
+  handLM.position.y = -40;
+  handL.add(handLM);
+  dan.add(handL);
+  handL.position.set(-33, 33, 0);
+  handL.rotation.z = dToR(handAngle.L.z = -10);
+
+  var handRM = handLM.clone();
+  handR = new THREE.Object3D();
+  handR.add(handRM);
+  handR.position.set(33, 33, 0);
+  handR.rotation.z = dToR(handAngle.R.z = 10);
+  dan.add(handR);
+
+  //dat.GUI
+  gcontrols = {
+    LHx: handAngle.L.x,
+    LHz: handAngle.L.z,
+    RHx: handAngle.R.x,
+    RHz: handAngle.R.z,
+    LLx: legAngle.L.x,
+    LLz: legAngle.L.z,
+    RLx: legAngle.R.x,
+    RLz: legAngle.R.z,
+    Hx: headAngle.x,
+    Hz: headAngle.z
+  }
+
+  var gui = new dat.GUI({
+    load: LoadJSON(),
+    preset: 'Default'
+  });
+  gui.remember(gcontrols);
+
+  var f1 = gui.addFolder('Left Hand');
+  f1.add(gcontrols, 'LHx', -80, 80).name('X');
+  f1.add(gcontrols, 'LHz', -80, 0).name('Z');
+  f1.open();
+
+  var f2 = gui.addFolder('Right Hand');
+  f2.add(gcontrols, 'RHx', -80, 80).name('X');
+  f2.add(gcontrols, 'RHz', 0, 80).name('Z');
+  f2.open();
+
+  var f3 = gui.addFolder('Left Leg');
+  f3.add(gcontrols, 'LLx', -80, 80).name('X');
+  f3.add(gcontrols, 'LLz', -80, 0).name('Z');
+  f3.open();
+
+  var f4 = gui.addFolder('Right Leg');
+  f4.add(gcontrols, 'RLx', -80, 80).name('X');
+  f4.add(gcontrols, 'RLz', 0, 80).name('Z');
+  f4.open();
+
+  var f5 = gui.addFolder('Head');
+  f5.add(gcontrols, 'Hx', -40, 40).name('X');
+  f5.add(gcontrols, 'Hz', -20, 20).name('Z');
+  f5.open();
+
+
+  window.addEventListener('resize', onWindowResize, false);
+}
+
+function LoadJSON() {
+  return {
+    "preset": "Default",
+    "remembered": {
+      "Default": {
+        "0": {
+          'LHx': 0,
+          'LHz': -10,
+          'RHx': 0,
+          'RHz': 10,
+          'LLx': 0,
+          'LLz': 0,
+          'RLx': 0,
+          'RLz': 0,
+          'Hx': 0,
+          'Hz': 0
+        }
+      },
+      "pose1": {
+        "0": {
+          "LHx": -48.23712748933244,
+          "LHz": -8.533536850997976,
+          "RHx": 43.52228198592941,
+          "RHz": 9.705322156037312,
+          "LLx": 41.75767795755901,
+          "LLz": 0,
+          "RLx": -58.824751659554956,
+          "RLz": 0,
+          "Hx": -13.530939574443693,
+          "Hz": -0.4446140424983156
+        }
+      },
+      "pose2": {
+        "0": {
+          "LHx": -2.357422751701506,
+          "LHz": -70.29467784396269,
+          "RHx": 0,
+          "RHz": 69.7018591206316,
+          "LLx": -48.23712748933244,
+          "LLz": 0,
+          "RLx": 0,
+          "RLz": 0,
+          "Hx": 21.761140992964705,
+          "Hz": -8.385332170165206
+        }
+      },
+      "pose3": {
+        "0": {
+          "LHx": -80,
+          "LHz": -31.47338921981344,
+          "RHx": -80,
+          "RHz": 28.233664453926725,
+          "LLx": 0,
+          "LLz": 0,
+          "RLx": 0,
+          "RLz": 0,
+          "Hx": -38.23539597162958,
+          "Hz": 0
+        }
+      },
+    },
+    "closed": false,
+    "folders": {}
+  };
+}
+
+function dToR(d) {
+  return d * Math.PI / 180;
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function poseAnimation(cur, des) {
+  //////
+}
+
+function animate() {
+  control.update();
+
+  handL.rotation.x = dToR(handAngle.L.x = gcontrols.LHx);
+  handL.rotation.z = dToR(handAngle.L.z = gcontrols.LHz);
+  handR.rotation.x = dToR(handAngle.R.x = gcontrols.RHx);
+  handR.rotation.z = dToR(handAngle.R.z = gcontrols.RHz);
+  legL.rotation.x = dToR(legAngle.L.x = gcontrols.LLx);
+  legL.rotation.z = dToR(legAngle.L.z = gcontrols.LLz);
+  legR.rotation.x = dToR(legAngle.R.x = gcontrols.RLx);
+  legR.rotation.z = dToR(legAngle.R.z = gcontrols.RLz);
+  head.rotation.x = dToR(headAngle.x = gcontrols.Hx);
+  head.rotation.z = dToR(headAngle.z = gcontrols.Hz);
+
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+
+</script>
+
+</body>
+</html>

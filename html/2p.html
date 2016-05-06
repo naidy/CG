@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 30px;
+		position: absolute;
+	}
+	#info {
+		position: absolute;
+		top: 10px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00;
+	}
+</style>
+</head>
+
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
+<script src="https://naidy.github.io/project/js/dat.gui.min.js"></script>
+
+<script>
+
+var scene, renderer, camera, camera3rd, control, gcontrols;
+var torso, head, legL, legR, handL, handR;
+var dan, danColor;
+var mode = 0;  //0:walk 1:dance
+var angle = 0;  //for walk
+var cameraMode = 0; //0:normal 1:3rd
+
+var Angle = function() {
+  this.x = 0;
+  this.y = 0;
+  this.z = 0;
+}
+var Rotate = function() {
+  this.L = new Angle();
+  this.R = new Angle();
+}
+
+var handAngle = new Rotate();
+var legAngle = new Rotate();
+var headAngle = new Angle();
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x888888);
+  renderer.shadowMapEnabled = true;
+  renderer.shadowMapType = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  //camera
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+  camera.position.set(0, 500, 600);
+  
+  camera3rd = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+
+  //control
+  control = new THREE.OrbitControls(camera, renderer.domElement);
+
+  //ground
+  THREE.ImageUtils.crossOrigin = '';
+  var groundGeo = new THREE.PlaneGeometry(1500, 1500);
+  var groundTex = THREE.ImageUtils.loadTexture('https://i.imgur.com/FCx71uS.jpg');
+  var groundMat = new THREE.MeshPhongMaterial({
+    map: groundTex,
+    side: THREE.DoubleSide
+  });
+  groundTex.wrapS = groundTex.wrapT = THREE.RepeatWrapping;
+  groundTex.repeat.set(9, 9);
+  var ground = new THREE.Mesh(groundGeo, groundMat);
+  scene.add(ground);
+  ground.rotation.x = Math.PI / 2;
+  ground.receiveShadow = true;
+
+	//light
+  var spotLight = new THREE.SpotLight(0xffffff, 1.5);
+  spotLight.position.set( -700, 1500, 700 );
+  spotLight.castShadow = true;
+  spotLight.shadowMapWidth = 2048;
+  spotLight.shadowMapHeight = 2048;
+  spotLight.shadowCameraNear = 1;
+  spotLight.shadowCameraFar = 4000;
+  spotLight.shadowCameraFov = 60;
+  spotLight.shadowCameraVisible = false;
+  scene.add( spotLight );
+  
+  var light = new THREE.AmbientLight(0x444444);
+	scene.add(light);
+
+  //dan
+  dan = new THREE.Object3D();
+  scene.add(dan);
+  danColor = new THREE.Color(0x7e613a);  //c2a57e
+  dan.position.y = 91;
+
+  //torso
+  var torsoGeo = new THREE.BoxGeometry(50, 70, 30);
+  var torsoTex = [];
+
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    side: THREE.BackSide
+  }));
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/fuu4GEJ.png'),
+    side: THREE.DoubleSide
+  }));
+  torsoTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/MV3skyt.png'),
+    side: THREE.DoubleSide
+  }));
+  var torsoMat = new THREE.MeshFaceMaterial(torsoTex);
+
+  torso = new THREE.Mesh(torsoGeo, torsoMat);
+  torso.castShadow = true;
+  dan.add(torso);
+
+  var skirt = new THREE.Mesh(new THREE.PlaneGeometry(50, 15), torsoMat);
+  skirt.position.set(0, -40, 18);
+  skirt.rotation.x = dToR(-18);
+  skirt.castShadow = true;
+  torso.add(skirt);
+
+  var skirtB = skirt.clone();
+  skirtB.position.z = -18;
+  skirtB.rotation.x = dToR(18);
+  skirtB.castShadow = true;
+  torso.add(skirtB);
+
+  var skirtL = new THREE.Mesh(new THREE.PlaneGeometry(30, 15), torsoMat);
+  skirtL.position.set(-28, -40, 0);
+  skirtL.eulerOrder = 'YXZ';
+  skirtL.rotation.x = dToR(-18);
+  skirtL.rotation.y = dToR(-90);
+  skirtL.castShadow = true;
+  torso.add(skirtL);
+
+  var skirtR = new THREE.Mesh(new THREE.PlaneGeometry(30, 15), torsoMat);
+  skirtR.position.set(28, -40, 0);
+  skirtR.eulerOrder = 'YXZ';
+  skirtR.rotation.x = dToR(-18);
+  skirtR.rotation.y = dToR(90);
+  skirtR.castShadow = true;
+  torso.add(skirtR);
+
+  //head
+  var headGeo = new THREE.BoxGeometry(110, 70, 70);
+  var headColor = new THREE.Color(0xc2a57e);
+
+  var headTex = [];
+  headTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/CpqAgC3.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/u2ygMTw.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshPhongMaterial({
+    color: danColor,
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshPhongMaterial({
+    side: THREE.BackSide
+  }));
+  headTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/F5xb32t.png'),
+    side: THREE.DoubleSide
+  }));
+  headTex.push(new THREE.MeshPhongMaterial({
+    map: THREE.ImageUtils.loadTexture('https://i.imgur.com/fjYKUXE.png'),
+    side: THREE.DoubleSide
+  }));
+  var headMat = new THREE.MeshFaceMaterial(headTex);
+  var headM = new THREE.Mesh(headGeo, headMat);
+
+  head = new THREE.Object3D();
+  headM.position.y = 30;
+  headM.castShadow = true;
+  head.add(headM);
+
+  dan.add(head);
+  head.position.y = 40;
+
+  //leg
+  var legGeo = new THREE.BoxGeometry(22, 50, 30);
+  var legMat = new THREE.MeshPhongMaterial({
+    color: danColor
+  });
+  var legLM = new THREE.Mesh(legGeo, legMat);
+  legL = new THREE.Object3D();
+  legLM.position.y = -25;
+  legLM.castShadow = true;
+  legL.add(legLM);
+  dan.add(legL);
+  legL.position.set(-15, -40, 0);
+  legL.rotation.x = dToR(legAngle.L.x = 45);
+
+  var legRM = legLM.clone();
+  legR = new THREE.Object3D();
+  legR.add(legRM);
+  legRM.castShadow = true;
+  dan.add(legR);
+  legR.position.set(15, -40, 0);
+  legR.rotation.x = dToR(legAngle.R.x = -45);
+
+  //hand
+  var handGeo = new THREE.BoxGeometry(15, 80, 15);
+  var handLM = new THREE.Mesh(handGeo, legMat);
+  handL = new THREE.Object3D();
+  handLM.position.y = -40;
+  handLM.castShadow = true;
+  handL.add(handLM);
+  dan.add(handL);
+  handL.position.set(-33, 33, 0);
+  handL.rotation.z = dToR(handAngle.L.z = -10);
+  handL.rotation.x = dToR(handAngle.L.x = -45);
+
+  var handRM = handLM.clone();
+  handR = new THREE.Object3D();
+  handR.add(handRM);
+  handRM.castShadow = true;
+  handR.position.set(33, 33, 0);
+  handR.rotation.z = dToR(handAngle.R.z = 10);
+  handR.rotation.x = dToR(handAngle.R.x = 45);
+  dan.add(handR);
+
+  //dat.GUI
+  gcontrols = {
+    camera: function(){
+    	cameraMode = (cameraMode+1)%2;
+    }
+  }
+
+  var gui = new dat.GUI();
+  var f1 = gui.addFolder('Camera');
+  f1.add(gcontrols, 'camera').name('Change Camera');
+  f1.open();
+
+  window.addEventListener('resize', onWindowResize, false);
+}
+
+function dToR(d) {
+  return d * Math.PI / 180;
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function walk(){
+  this.move = this.move || 2;
+  if (legAngle.L.x >= 45)
+  	this.move = 2;
+  else if (legAngle.L.x <= -45)
+  	this.move = -2;
+  legAngle.L.x -= this.move;
+  legL.rotation.x = dToR(legAngle.L.x);
+  legAngle.R.x += this.move;
+  legR.rotation.x = dToR(legAngle.R.x);
+  handAngle.L.x += this.move;
+  handL.rotation.x = dToR(handAngle.L.x);
+  handAngle.R.x -= this.move;
+  handR.rotation.x = dToR(handAngle.R.x);
+}
+
+function animate() {
+  control.update();
+
+	if (mode == 0){
+  	dan.position.set (Math.cos(dToR(angle))*200, 91, Math.sin(dToR(angle))*200);
+    dan.rotation.y = -dToR(angle);
+    angle += 0.5;
+    walk();
+    
+    if (cameraMode){
+      var cameraOffset = dan.localToWorld (new THREE.Vector3(0,100,-350));
+      camera3rd.position.copy(cameraOffset);
+      camera3rd.lookAt(dan.position);
+    }
+  }
+  else if (mode == 1){
+  	dan.lookAt(new THREE.Vector3(camera.position.x, 91, camera.position.z));
+  }
+
+  requestAnimationFrame(animate);
+  render(cameraMode);
+}
+
+function render (cameraMode){
+	switch (cameraMode){
+  	case 0:
+    	renderer.render(scene, camera);
+      break;
+    case 1:
+    	renderer.render(scene, camera3rd);
+      break;
+  }
+}
+
+
+</script>
+
+</body>
+</html>
