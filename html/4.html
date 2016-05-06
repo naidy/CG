@@ -63,16 +63,16 @@ function init() {
     scene.add(light);
 
     //loader
-    var loader = new THREE.JSONLoader();
-
-	loader.load(
-		'http://naidy.github.io/CG/model/space-ship/space-shuttle-orbiter.json',
-		function ( geometry, materials ) {
-			var material = new THREE.MultiMaterial( materials );
-			var object = new THREE.Mesh( geometry, material );
-			scene.add( object );
-		}
-	);
+    var loader = new THREE.ObjectLoader();
+	loader.load("http://naidy.github.io/CG/model/space-ship/space-shuttle-orbiter.json",function ( obj ) {
+    	scene.add( obj );
+	});
+	/*
+	var loader = new THREE.JSONLoader();
+	loader.load( 'http://naidy.github.io/CG/model/space-ship/space-shuttle-orbiter.json', function ( geometry, materials ) {
+    	var mesh = new THREE.Mesh( geometry, new THREE.MeshFaceMaterial(materials));
+    	scene.add( mesh );
+	});*/
 	
     window.addEventListener('resize', onWindowResize, false);
 }
