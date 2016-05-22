@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 30px;
+		position: absolute;
+	}
+	#info {
+		position: absolute;
+		top: 10px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00;
+	}
+</style>
+</head>
+
+<body>
+
+<div id="info">hw5<br/>
+	GLSL
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.5/dat.gui.min.js"></script>
+
+<script id="myVertexShader" type="x-shader/x-vertex">
+uniform int shading;
+uniform int mode;
+varying vec3 color;
+varying vec4 pos_pixel;
+vec4 pos_vertex;
+
+void main() 
+{
+	gl_Position = projectionMatrix* modelViewMatrix * vec4( position, 1.0 );
+	if (mode == 0)  //object
+		pos_vertex = vec4( position, 1.0 );    
+	else if (mode == 1)  //world
+		pos_vertex = modelMatrix * vec4( position, 1.0 );          
+	else if (mode == 2)  //eye
+		pos_vertex = modelViewMatrix * vec4( position, 1.0 );   
+	
+	pos_pixel = pos_vertex;
+	if (shading == 0){
+		if (pos_vertex.x > 0.0) 
+		    color = vec3 (1, 1, 1);
+		else 
+		    color = vec3 (0, 0, 0); 
+	}
+}
+</script>
+<script id="myFragmentShader" type="x-shader/x-fragment">
+uniform int shading;
+vec3 color_pixel;
+varying vec4 pos_pixel;
+varying vec3 color;
+
+void main()
+{
+    if(shading == 1){
+        if (pos_pixel.x > 0.0) 
+	        color_pixel = vec3 (1, 1, 1);
+	    else 
+	        color_pixel = vec3 (0, 0, 0);  
+        gl_FragColor = vec4(color_pixel, 1.0);
+    }
+    else
+        gl_FragColor = vec4 (color, 1.0);    
+}
+</script>
+
+<script>
+
+var camera, scene, renderer, control, gcontrols;
+var teapot1, teapot2;
+var angle = 0;
+
+init();
+animate();
+
+function init() {
+	renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+	renderer.setClearColor (0x888888);
+	renderer.shadowMapEnabled = true;
+	renderer.shadowMapType = THREE.PCFSoftShadowMap;
+
+    document.body.appendChild(renderer.domElement);
+	
+    scene = new THREE.Scene();
+
+	//camera
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set (0, 0, 160);
+    scene.add(camera);
+	
+	control = new THREE.OrbitControls(camera, renderer.domElement);
+	
+	//grid
+	/*var grid = new THREE.GridHelper (100, 10);
+	grid.setColors (0xff0000, 0xffffff);
+	scene.add (grid);*/
+
+	//ground  
+	THREE.ImageUtils.crossOrigin = '';
+	var tex = THREE.ImageUtils.loadTexture('../imgs/wood.jpg');
+	var bmp = THREE.ImageUtils.loadTexture('../imgs/wood_bump.png');
+	var ground = new THREE.Mesh (new THREE.PlaneGeometry (300, 300),
+		new THREE.MeshPhongMaterial ({
+			map: tex, bumpMap: bmp, side: THREE.DoubleSide
+	}));
+	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+	tex.repeat.set(3, 3);
+	bmp.wrapS = bmp.wrapT = THREE.RepeatWrapping;
+	bmp.repeat.set(3, 3);
+	scene.add (ground);
+	ground.rotation.x = Math.PI / 2;
+	ground.receiveShadow = true;
+	
+	//light
+    light = new THREE.DirectionalLight(0xffffff, 1.0);
+    light.position.set(-1, 1, 1);
+    scene.add(light);
+    light.castShadow = true;
+	light.shadowMapWidth = 2048;
+	light.shadowMapHeight = 2048;
+	light.shadowCameraNear = -700;
+	light.shadowCameraFar = 700;
+	light.shadowCameraLeft = -700;
+	light.shadowCameraRight = 700;
+	light.shadowCameraVisible = false;
+
+	var ambient = new THREE.AmbientLight (0x404040);
+	scene.add (ambient);
+
+	//teapot
+	var teapotMat = new THREE.ShaderMaterial ({
+		uniforms: {
+			shading: {
+				type: 'i', value: 0
+			},
+			mode: {
+				type: 'i', value: 0
+			}
+		},
+		vertexShader: document.getElementById('myVertexShader').textContent,
+        fragmentShader: document.getElementById('myFragmentShader').textContent
+	});
+	var loader = new THREE.JSONLoader();
+	loader.load ('../model/teapot.json', function(geometry, materials){
+		teapot1 = new THREE.Mesh (geometry, teapotMat);
+		teapot1.castShadow = true;
+		teapot1.receiveShadow = true;
+		scene.add (teapot1);
+		teapot1.scale.set (8, 8, 8);
+
+		teapot2 = teapot1.clone();
+		teapot2.material = new THREE.MeshPhongMaterial();
+		teapot2.castShadow = true;
+		teapot2.receiveShadow = true;
+		scene.add (teapot2);
+	});
+
+	//dat.GUI
+	gcontrols = new function() {
+    	this.shading = 0;
+    	this.mode = 0;
+    }
+
+    var gui = new dat.GUI();
+
+    var f1 = gui.addFolder('Shading');
+    f1.add (gcontrols, 'shading', {vertex: 0, pixel: 1}).onFinishChange(function(value){
+    		teapotMat.uniforms.shading.value = value;
+    });
+
+    var f2 = gui.addFolder("Mode");
+    f2.add (gcontrols, 'mode', {object: 0, world: 1, eye: 2}).onFinishChange(function(value){
+    		teapotMat.uniforms.mode.value = value;
+    });
+	
+    window.addEventListener('resize', onWindowResize, false);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function dToR (n){
+	return n * Math.PI / 180;
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    angle += 0.5;
+    if (teapot1 != undefined)
+    	teapot1.position.set (Math.cos(dToR(angle)) * 70, 0, Math.sin(dToR(angle)) * 70);
+	
+    render();
+	update();
+}
+
+function update() 
+{
+	control.update();
+}
+
+function render() 
+{
+	renderer.render(scene, camera);
+}
+
+</script>
+
+</body>
+</html>
