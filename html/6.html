@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+	body {
+		background-color: #fff;
+		color: #111;
+		margin: 0px;
+		overflow: hidden;
+		font-family: Monospace;
+		font-size: 30px;
+		position: absolute;
+	}
+	#info {
+		position: absolute;
+		top: 10px; width: 100%;
+		
+		padding: 5px;
+		text-align: center;
+		color: #ffff00;
+	}
+	strong {color: #ff0000}
+</style>
+</head>
+
+<body>
+
+<div id="info">hw6<br/>
+	<strong>Right Click</strong> to create teapot<br/>
+	<strong>Left Click</strong> to toggle
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r70/three.min.js"></script>
+<script src="https://dl.dropboxusercontent.com/u/3587259/Code/Threejs/OrbitControls.js"></script>
+<script src="../js/teapot.js"></script>
+
+<script id="myVertexShader" type="x-shader/x-vertex">
+uniform vec3 lightPos;		
+varying float ndotL;
+varying vec3 reflectVec;
+varying vec3 viewVec;
+
+void main() {
+	vec3 eyePos = (modelViewMatrix * vec4(position, 1.0)).xyz;
+	vec3 trans_norm = normalize(normalMatrix * normal);
+	vec3 lightVec = normalize(lightPos - eyePos);
+
+	reflectVec = normalize(reflect(-lightVec, trans_norm));
+	viewVec = normalize(-eyePos);
+	ndotL = (dot(lightVec, trans_norm) + 1.0) * 0.5;
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+<script id="myFragmentShader" type="x-shader/x-fragment">
+uniform vec3  surfaceColor;
+uniform vec3  warmColor;
+uniform vec3  coolColor;
+uniform float diffuseWarm;
+uniform float diffuseCool;
+uniform float opacity;
+varying float ndotL;
+varying vec3  reflectVec;
+varying vec3  viewVec;
+
+void main(void) {
+  vec3 kcool = min (coolColor + diffuseCool * surfaceColor, 1.0);
+  vec3 kwarm = min (warmColor + diffuseWarm * surfaceColor, 1.0);
+  vec3 kfinal = mix (kcool, kwarm, ndotL);
+
+  vec3 nreflect = normalize(reflectVec);
+  vec3 nview = normalize(viewVec);
+
+  float spec = max(dot (nreflect, nview), 0.0);
+  spec = pow(spec, 32.0);
+
+  gl_FragColor = vec4 (min(kfinal + spec, 1.0), opacity);
+}
+</script>
+
+<script>
+
+var camera, scene, renderer, control;
+var teapots = [], meshes = [], pickables = [];
+var teapotMat, teapot, lightSphere;
+var raycaster, mouse = new THREE.Vector2();
+var lightAngle = 0, light;
+
+init();
+animate();
+
+function init() {
+	renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+	renderer.setClearColor (0x888888);
+
+    document.body.appendChild(renderer.domElement);
+	
+    scene = new THREE.Scene();
+
+	//camera
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+    camera.position.set (0, 100, 300);
+    scene.add(camera);
+	
+	control = new THREE.OrbitControls(camera, renderer.domElement);
+
+	//ground  
+	var ground = new THREE.Mesh (new THREE.PlaneGeometry (300, 300),
+		new THREE.MeshPhongMaterial ({
+			color: 0xff7834, side: THREE.DoubleSide
+	}));
+	scene.add (ground);
+	ground.rotation.x = Math.PI / 2;
+	pickables.push (ground);
+
+	//platform
+	var platform = new THREE.Mesh (new THREE.BoxGeometry (50,10,80),
+  		new THREE.MeshLambertMaterial({transparent:true, opacity:0.5}));
+	platform.position.set (60,5,30);
+	var platform2 = platform.clone();
+	platform2.position.set (-60,0,-30);
+	scene.add (platform2);
+	scene.add (platform);
+
+	raycaster = new THREE.Raycaster();
+	
+	//light
+    light = new THREE.PointLight(0xffffff);
+    scene.add(light);
+  	light.position.set(100, 300, 200);
+ 
+  	lightSphere = new THREE.Mesh(new THREE.SphereGeometry(2),
+    	new THREE.MeshBasicMaterial({
+      	color: 0xffff00,
+      	wireframe: true
+    }));
+  	scene.add(lightSphere);
+
+	//teapot
+	teapotMat = new THREE.ShaderMaterial ({
+		uniforms: {
+			lightPos: {
+				type: "v3",
+				value: new THREE.Vector3()
+			},
+			surfaceColor: {
+				type: "v3",
+				value: new THREE.Vector3(0, 0, 0.8)
+			},
+			warmColor: {
+				type: "v3",
+				value: new THREE.Vector3(0.8, 0.8, 0)
+			},
+			coolColor: {
+				type: "v3",
+				value: new THREE.Vector3(0, 0, 0.7)
+			},
+			diffuseWarm: {
+				type: "f",
+				value: 0.45
+			},
+			diffuseCool: {
+				type: "f",
+				value: 0.45
+			},
+			opacity: {
+				type: 'f',
+				value: 1.0
+			}
+		},
+		vertexShader: document.getElementById('myVertexShader').textContent,
+        fragmentShader: document.getElementById('myFragmentShader').textContent
+	});
+	teapotMat.transparent = true;
+
+	var loader = new THREE.JSONLoader();
+	loader.load ('../model/teapot.json', function(geometry, materials){
+		teapot = new THREE.Mesh (geometry, teapotMat);
+		teapot.scale.set (5, 5, 5);
+	});
+	
+    window.addEventListener('resize', onWindowResize, false);
+    document.addEventListener('mousedown', onDocumentMouseDown, false);
+}
+
+function onDocumentMouseDown(event) {
+	event.preventDefault();
+	mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+	mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+	raycaster.setFromCamera(mouse, camera);
+
+	if (event.button === 2){
+		var intersects = raycaster.intersectObjects(pickables);
+		if (intersects.length > 0) {
+			var origin = new THREE.Vector3();
+			origin.copy (intersects[0].point);
+			origin.y = 30;
+
+			raycaster.set (origin, new THREE.Vector3(0,-1,0));
+			intersects = raycaster.intersectObjects (scene.children);
+			if (intersects.length > 0) {
+				var t = new Teapot();
+				t.mesh.position.copy (intersects[0].point);
+			}
+		}
+	}
+	else if (event.button === 0){
+		var intersects = raycaster.intersectObjects(meshes);
+		if (intersects.length > 0){
+			var i;
+			for (i = 0; i < meshes.length; i++){
+				if (meshes[i] === intersects[0].object){
+					teapots[i].turn = !teapots[i].turn;
+					break;
+				}
+			}
+		}
+	}
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function dToR (n){
+	return n * Math.PI / 180;
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    var i;
+    for (i = 0; i < teapots.length; i++)
+    	if (teapots[i] != undefined)
+    		teapots[i].update();
+
+    lightAngle += 0.01;
+  	light.position.set(50 * Math.cos(lightAngle), 80, 50 * Math.sin(lightAngle));
+  	lightSphere.position.copy(light.position);
+	
+    render();
+	update();
+}
+
+function update() 
+{
+	control.update();
+}
+
+function render() 
+{
+	renderer.render(scene, camera);
+}
+
+</script>
+
+</body>
+</html>
